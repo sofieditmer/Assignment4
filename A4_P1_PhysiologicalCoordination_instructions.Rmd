@@ -55,11 +55,12 @@ N.B. to give you a bit more data I included data from previous years (Study1, St
 ```{r}
 # Load the libraries
 library(pacman)
-pacman::p_load(tidyverse, dplyr, purrr, lme4, lmerTest, DescTools, sjstats, tidymodels, groupdata2, cvms, randomForest, ggplot2)
+pacman::p_load(tidyverse, dplyr, purrr, lme4, lmerTest, DescTools, sjstats, tidymodels, groupdata2, cvms, randomForest, ggplot2, caret)
 
 # Load the file
 single_file <- read.csv("data/Study1_G1_T1_Synchronous.csv")
 
+##PLOT DATA##
 #Plot: Heart Rate
 plot1_HR <- ggplot(single_file, aes(x = time, y = HR1)) + geom_line()
 plot1_HR
@@ -69,7 +70,6 @@ plot2_HR
 
 #We use grid.arrange() function to show the plots next to each other
 single_plots_HR <- gridExtra::grid.arrange(plot1_HR, plot2_HR, ncol = 2)
-single_plots_HR
 
 #Plot: Respiration
 plot1_Resp <- ggplot(single_file, aes(x = time, y = Resp1)) + geom_line()
@@ -80,22 +80,14 @@ plot2_Resp
 
 #We use grid.arrange() function to show the plots next to each other
 single_plots_Resp <- gridExtra::grid.arrange(plot1_Resp, plot2_Resp, ncol = 2)
-single_plots_Resp
 
+```
 
-## Remove outliers. We set the threshold to 2.5 standard deviations, which means that we remove all data points above or below 2.5
+```{r}
+##REMOVE OUTLIERS##
+#We set the threshold to 2.5 standard deviations, which means that we remove all data points above or below 2.5
 
-#Heart rate
-single_file$HR1_clean <- removeOuts(single_file$HR1, 2.5)
-
-single_file$HR2_clean <- removeOuts(single_file$HR2, 2.5)
-
-#Respiration
-single_file$Resp1_clean <- removeOuts(single_file$Resp1, 2.5)
-
-single_file$Resp2_clean <- removeOuts(single_file$Resp2, 2.5)
-
-### Tip, check the function below
+#First we create a function that removes outliers
 removeOuts <- function(ts,threshold){
   ts[ts > (mean(ts,na.rm=T) +
              (threshold*sd(ts,na.rm=T))) | 
@@ -105,98 +97,123 @@ removeOuts <- function(ts,threshold){
 }
 threshold=2.5 # Default value at 2.5 sds from the mean
 
-# Plot raw data againt those with the artiacts removed
-#We want to have multiple plots showing the raw and the clean data for each participant in the pair
-#First we mmake a new dataframe selecting only the columns we want
+#Removing outliers: Heart rate 
+single_file$HR1_clean <- removeOuts(single_file$HR1, 2.5)
+single_file$HR2_clean <- removeOuts(single_file$HR2, 2.5)
+
+#Removing outliers: Respiration
+single_file$Resp1_clean <- removeOuts(single_file$Resp1, 2.5)
+single_file$Resp2_clean <- removeOuts(single_file$Resp2, 2.5)
+
+
+#Now we plot the raw data againt those with the artiacts (outliers) removed. We want to have multiple plots showing the raw and the clean data for each participant. First we make a new dataframe selecting only the columns we want.
 
 select_single_file <- select(single_file, time, HR1, HR1_clean, HR2, HR2_clean, Resp1, Resp2, Resp1_clean, Resp2_clean)  
 
-#HEART RATE##
+#HEART RATE#
 #Now we use the gather function to merge the raw HR1 data and the clean HR1 data which means that we do not want the HR2 and the HR2_clean data to be combined which is why we put them inside the -c()
+
 select_single_file <- gather(select_single_file, "HR1", "HR1_raw_and_HR1_clean", -c(time, HR2, HR2_clean, Resp1, Resp2, Resp1_clean, Resp2_clean))
 
 #Now we use the gather function to merge the raw HR2 data and the clean HR2 data which means that we do not want the HR1 and the HR1_clean data to be combined which is why we put them inside the -c()
-select_single_file <- gather(select_single_file, "HR2", "HR2_raw_and_R2_clean", -c(time, HR1, HR1_raw_and_HR1_clean, Resp1, Resp2, Resp1_clean, Resp2_clean))
+
+select_single_file <- gather(select_single_file, "HR2", "HR2_raw_and_HR2_clean", -c(time, HR1, HR1_raw_and_HR1_clean, Resp1, Resp2, Resp1_clean, Resp2_clean))
 
 #Now we can plot the HR1 and HR2 data
-plot_HR1 <- ggplot(select_single_file, aes(x = time, y = HR1_raw_and_HR1_clean, color = HR1)) + geom_line() + labs(title = "HR1", x = "time", y = "Heart Rate")
+plot_HR1 <- ggplot(select_single_file, aes(x = time, y = HR1_raw_and_HR1_clean, color = HR1)) +
+  geom_line() + 
+  labs(title = "HR1", x = "time", y = "Heart Rate")
+
 plot_HR1
 
-plot_HR2 <- ggplot(select_single_file, aes(x = time, y = HR2_raw_and_R2_clean, color = HR2)) + geom_line() + labs(title = "HR2", x = "time", y = "Heart Rate")
+plot_HR2 <- ggplot(select_single_file, aes(x = time, y = HR2_raw_and_HR2_clean, color = HR2)) + 
+  geom_line() + 
+  labs(title = "HR2", x = "time", y = "Heart Rate")
+
 plot_HR2
 
+#Using grid.arrange function to plot the two next to each other
 plots_HR <- gridExtra::grid.arrange(plot_HR1, plot_HR2, ncol = 2)
-plots_HR
 
 #RESPIRATION#
-#Using gather function
-select_single_file <- gather(select_single_file, "Resp1", "Resp1_raw_and_Resp1_clean", -c(time, Resp2, Resp2_clean, HR2_raw_and_R2_clean, HR1_raw_and_HR1_clean, HR1, HR2))
+#Using gather function in the same way as we did for the heart rate data
+select_single_file <- gather(select_single_file, "Resp1", "Resp1_raw_and_Resp1_clean", -c(time, Resp2, Resp2_clean, HR2_raw_and_HR2_clean, HR1_raw_and_HR1_clean, HR1, HR2))
 
-select_single_file <- gather(select_single_file, "Resp2", "Resp2_raw_and_Resp2_clean", -c(time, Resp1, Resp1_raw_and_Resp1_clean, HR2_raw_and_R2_clean, HR1_raw_and_HR1_clean, HR1, HR2))
+select_single_file <- gather(select_single_file, "Resp2", "Resp2_raw_and_Resp2_clean", -c(time, Resp1, Resp1_raw_and_Resp1_clean, HR2_raw_and_HR2_clean, HR1_raw_and_HR1_clean, HR1, HR2))
 
-#Plotting
-plot_Resp1 <- ggplot(select_single_file, aes(x = time, y = Resp1_raw_and_Resp1_clean, color = Resp1)) + geom_line() + labs(title = "Respiration 1", x = "Time", y = "Heart Rate")
+#Now we plot the respiration data
+plot_Resp1 <- ggplot(select_single_file, aes(x = time, y = Resp1_raw_and_Resp1_clean, color = Resp1)) +
+  geom_line() + 
+  labs(title = "Respiration 1", x = "Time", y = "Heart Rate")
 
 plot_Resp1
 
-plot_Resp2 <- ggplot(select_single_file, aes(x = time, y = Resp2_raw_and_Resp2_clean, color = Resp2)) + geom_line() + labs(title = "Respiration 2", x = "Time", y = "Heart Rate")
+plot_Resp2 <- ggplot(select_single_file, aes(x = time, y = Resp2_raw_and_Resp2_clean, color = Resp2)) +
+  geom_line() + 
+  labs(title = "Respiration 2", x = "Time", y = "Heart Rate")
 
 plot_Resp2
 
 #Using grid.arrange function to plot the two next to each other
 plots_Resp <- gridExtra::grid.arrange(plot_Resp1, plot_Resp2, ncol = 2)
 
-plots_Resp
 
-#SCALE#
-### Tip: if scale() gives some issues, try the one below
-#z_scale <- function(column){
-#  column_c <- (column - mean(column)) / sd(column)
-#}
+```
+
+```{r}
+##SCALE##
+#First we scale the heart rate data and then we scale the respiration data
 
 #HEART RATE##
 #First we create a new column for the scaled heart rates for both HR1 and HR2
 single_file$HR1_scaled <- scale(single_file$HR1_clean)
-
 single_file$HR2_scaled <- scale(single_file$HR2_clean)
 
 #Now we plot again to check what the scaled data look like
-plot1_HR_scaled <- ggplot(single_file, aes(x = time, y = HR1_scaled)) + geom_line() + labs(title = "HR1", x = "Time", y = "Heart Rate")
+plot1_HR_scaled <- ggplot(single_file, aes(x = time, y = HR1_scaled)) + 
+  geom_line() + 
+  labs(title = "HR1", x = "Time", y = "Heart Rate")
 
-plot1_scaled
+plot1_HR_scaled
 
-plot2_HR_scaled <- ggplot(single_file, aes(x = time, y = HR2_scaled)) + geom_line() + labs(title = "HR2", x = "Time", y = "Heart Rate")
+plot2_HR_scaled <- ggplot(single_file, aes(x = time, y = HR2_scaled)) + 
+  geom_line() + 
+  labs(title = "HR2", x = "Time", y = "Heart Rate")
 
-plot2_scaled
+plot2_HR_scaled
 
-single_plots_HR_scaled <- gridExtra::grid.arrange(plot1_scaled, plot2_scaled, ncol = 2)
+#Using the grid.arrange function to plot the two next to each other
+single_plots_HR_scaled <- gridExtra::grid.arrange(plot1_HR_scaled, plot2_HR_scaled, ncol = 2)
 
-single_plots_HR_scaled
 
 ##RESPIRATION##
+#Now we scale the respiration data
 single_file$Resp1_scaled <- scale(single_file$Resp1_clean)
-
 single_file$Resp2_scaled <- scale(single_file$Resp2_clean)
 
-#Now we plot again to check what the scaled data look like
-plot1_respiration_scaled <- ggplot(single_file, aes(x = time, y = Resp1_scaled)) + geom_line() + labs(title = "Respiration 1", x = "Time", y = "Respiration")
+#Now we plot again to check what the scaled respiration data look like
+plot1_respiration_scaled <- ggplot(single_file, aes(x = time, y = Resp1_scaled)) + 
+  geom_line() + 
+  labs(title = "Respiration 1", x = "Time", y = "Respiration")
 
-plot1_scaled
+plot1_respiration_scaled
 
-plot2_respiration_scaled <- ggplot(single_file, aes(x = time, y = Resp2_scaled)) + geom_line() + labs(title = "Respiration 2", x = "Time", y = "Respiration")
+plot2_respiration_scaled <- ggplot(single_file, aes(x = time, y = Resp2_scaled)) + 
+  geom_line() + 
+  labs(title = "Respiration 2", x = "Time", y = "Respiration")
 
 plot2_respiration_scaled
 
+#Using the grid.arrange function to plot them next to each other
 single_plots_resp_scaled <- gridExtra::grid.arrange(plot1_respiration_scaled, plot2_respiration_scaled, ncol = 2)
+```
 
-single_plots_resp_scaled
-
-## Downsample
-### This is tricky, so you can have a look at my code  (relying on Ludvig's groupdata2) if you get stuck
-
-#First we create a new column named "rownames" which is used as an index to put the columns back together in the loop below
+```{r}
+##DOWNSAMPLE##
+#First we create a new column named "rownames" which is used as an index to put the columns back together later
 single_file$rownames <- (1:nrow(single_file))
 
+#Now we downsample using Kenneth's code
 d1 = single_file %>%
  group(n = 100, method = 'greedy') %>%
  dplyr::summarise(
@@ -207,12 +224,13 @@ d1 = single_file %>%
    Resp2 = mean(Resp2_scaled,na.rm=T),
    rowname = rownames[1]) #the index we use to put them back together
 
-##Plot the downsampled data
+#Now we plot the downsampled data
 p4 <- ggplot(data = d1) +
   geom_path(aes(time, Resp1, color = "Respiration 1")) +
   geom_path(aes(time, Resp2, color = "Respiration 2")) +
   labs(x = "Time", y = "Resp") +
   theme(legend.position="bottom")
+
 p4
 
 p5 <- ggplot(data = d1) +
@@ -223,45 +241,49 @@ p5 <- ggplot(data = d1) +
 
 p5
 
-## Now add the group, trial, condition to the cleaned up, scaled, downsampled data
+#Now we need to add the group, trial, condition to the cleaned up, scaled, downsampled data
 ## Tip the info is in the file name
 
 #We need to split up the filename in order to get the information about group, trial, condition to the scaled downsampled data. We create a function that can do this for us for all of the filenames
 
 adding_stuff <- function(filename) {
-
+  
 #Load data
 sample <- read.csv(filename, header=TRUE, sep=",")
 
 #Parse filename to extract group, trials, condition - parsed is extracting things from filename into variables
 #Example of filename: Study1_G1_T1_Synchronous
-t <- str_split(filename, "G", simplify = TRUE) #this will split the filename before "G"
-t
-st <- str_extract(t[1], "\\d")
-st <- as.numeric(st)
-data = data.frame(Study = st)
-    
-u <- str_split(t[2], "T", simplify = TRUE) #this will split the filename before "T"
-di <- str_extract(u[1], "\\d")
-di <- as.numeric(di)
-data = data.frame(Study = st, Group = di)
-    
-v <- str_split(u[2], "_", simplify = TRUE)
-v[2] <- as.numeric(v[2])
-data = data.frame(Study = st, Group = di, Condition = v[2])
-    
-pa <- v[1]
-pa <- as.numeric(pa)
-data = data.frame(Study = st, Group = di, Trial = tr, Participant = pa)
-    
-# extract pitch descriptors (mean, sd, iqr, etc)
-data$mean_time <- mean(sample$time)
-data$mean_hz <- mean(sample$f0)
 
+#First we want to split the whole file name before "G" so we can get the study
+t <- str_split(filename, "G", simplify = TRUE) #this will split the filename before "G". G dissapears when we split
+st <- str_extract(t[1], "\\d") #//d means that we only want numerics - thus we remove characters
+st <- as.numeric(st)
+data = data.frame(Study = st) #Now we create a new data frame where we create a new colum called "Study"
+
+#Now we want to get the group extracted from the filename, so we split up before T    
+g <- str_split(t[2], "T", simplify = TRUE) #this will split the filename before "T"
+gr <- str_extract(g[1], "\\d")
+gr <- as.numeric(gr)
+data = data.frame(Study = st, Group = gr) #we add a new column 
+
+#Now we want the condition
+co <- str_split(g[2], "[[:punct:]]", simplify = TRUE) # split before period
+con <- str_split(co[2], "_", simplify = TRUE)#we split before underscore
+con[2] <- as.character(con[2])
+data = data.frame(Study = st, Group = gr, Condition = con[2])
+
+#Now we want the trial   
+tr <- co[1]
+tr <- as.numeric(tr)
+data = data.frame(Study = st, Group = gr, Condition = co[2], Trial = tr, File = filename) #We add another column called filename in order to make it eaiser to merge it with another dataframe later
+    
 # combine all this data in one dataset
 return(data)
 
 }
+
+#We test the function on just one file
+test_data <- adding_stuff("data/Study1_G1_T1_Synchronous.csv")
 
 ```
 
@@ -274,31 +296,207 @@ A couple of tips:
 - each study restarts the group numbering, so you should make sure to change that (e.g. 100 * Study + Group)
 - you need to make sure all the data are meaningful or something has to be removed. Plotting is your friend. E.g. "Study1_G1_T1_Synchronous" has one bad respiration signal. We could replace it with NAs
 
-
 ```{r}
-# Define a function running the loading, artifact removal, scaling, downsampling, info adding.
-
+##PREPROCESSING##
+#We create a function that splits up the filenames, removes artifacts, scales, and downsamples.
 data_preprocess <- function(filename, threshold = 2.5){
   
-  # To be filled in
+  df <- read.csv(filename)
   
+  #First we remove outliers
+  #Heart rate: removing outliers
+  df$HR1_clean <- removeOuts(df$HR1, 2.5)
+  df$HR2_clean <- removeOuts(df$HR2, 2.5)
+  
+  #Respiration: removing outliers
+  df$Resp1_clean <- removeOuts(df$Resp1, 2.5)
+  df$Resp2_clean <- removeOuts(df$Resp2, 2.5)
+  
+  #Now we scale
+  #Heart rate: scaling
+  df$HR1_scaled <- scale(df$HR1_clean)
+  df$HR2_scaled <- scale(df$HR2_clean)
+  
+  #Respiration: scaling
+  df$Resp1_scaled <- scale(df$Resp1_clean)
+  df$Resp2_scaled <- scale(df$Resp2_clean)
+  
+  #Downsampling
+  df$rownames <- (1:nrow(df))
+  
+  d1 = df %>%
+    group(n = 100, method = 'greedy') %>%
+    dplyr::summarise(
+      time = mean(time,na.rm=T),
+      HR1 = mean(HR1_scaled,na.rm=T),
+      HR2 = mean(HR2_scaled,na.rm=T),
+      Resp1 = mean(Resp1_scaled,na.rm=T),
+      Resp2 = mean(Resp2_scaled,na.rm=T),
+      File =filename,
+      rowname = rownames[1]) #the index we use to put them back together
+  
+  #Now we need to split the whole file name before "G" so we can get the study
+  t <- str_split(filename, "G", simplify = TRUE) #this will split the filename before "G". G dissapears when we split
+  
+  st <- str_extract(t[1], "\\d") #//d means that we only want numerics - thus we remove characters
+  st <- as.numeric(st)
+  d1$Study<- st #Here we add a new colum called "Study" to the dataframe d1
+  
+  #Now we want to get the group extracted from the filename, so we split up before T    
+  g <- str_split(t[2], "T", simplify = TRUE) #this will split the filename before "T"
+  gr <- str_extract(g[1], "\\d")
+  gr <- as.numeric(gr)
+  d1$Group <- gr #we add a new column to the dataframe
+  
+  #Now we want the condition
+  co <- str_split(filename, "_", simplify = TRUE) # split before period
+  con <- str_split(co[,4], "[[:punct:]]", simplify = TRUE)#we split before underscore
+  con_2 <- con[,1]
+  d1$Condition <- con_2 #adding condition as a colum in the dataframe d1
+  
+  #Now we want the trial   
+  tr <- str_split(co[,3], "T", simplify = TRUE)
+  tr_1 <- tr[,2]
+  d1$Trial <- tr_1 #adding trial as a column
+
   return(d1)
 
 }
 
-#  Identify all files to be read
+#We apply this function on a single file to test if it works
+test_data <- data_preprocess("data/Study1_G1_T2_TurnTaking.csv")
 
-# Run the function on the whole dataset using map_df
+#The function works, but we have noticed that in study 4 the column time is called "TimeMs" which is different from all other studies. Therefore we need to make a second function, that does the exact same things as the the function above, that can process the data from study 4 and then we can combine the dataframes afterward. 
 
-         
-# Now we need to make sure all the data are meaningful or something has to be removed
-# E.g. "Study1_G1_T1_Synchronous" has one bad respiration signal. We could replace it with NAs
+data_preprocess_study4 <- function(filename, threshold = 2.5){
+  
+  df <- read.csv(filename)
+  
+  #Remove outliers 
+  df$HR1_clean <- removeOuts(df$HR1, 2.5)
+  df$HR2_clean <- removeOuts(df$HR2, 2.5)
+  df$Resp1_clean <- removeOuts(df$Resp1, 2.5)
+  df$Resp2_clean <- removeOuts(df$Resp2, 2.5)
+  
+  #Scale
+  df$HR1_scaled <- scale(df$HR1_clean)
+  df$HR2_scaled <- scale(df$HR2_clean)
+  df$Resp1_scaled <- scale(df$Resp1_clean)
+  df$Resp2_scaled <- scale(df$Resp2_clean)
+  
+  #Downsampling
+  df$rownames <- (1:nrow(df))
+  
+  d1 = df %>%
+    group(n = 100, method = 'greedy') %>%
+    dplyr::summarise(
+      time = mean(TimeMs,na.rm=T)/1000, #We divide by 1000 because the data is in ms and we want it in s
+      HR1 = mean(HR1_scaled,na.rm=T),
+      HR2 = mean(HR2_scaled,na.rm=T),
+      Resp1 = mean(Resp1_scaled,na.rm=T),
+      Resp2 = mean(Resp2_scaled,na.rm=T),
+      File =filename,
+      rowname = rownames[1]) #the index we use to put them back together
+  
+  #Parsing the filenames
+  t <- str_split(filename, "G", simplify = TRUE)
+  st <- str_extract(t[1], "\\d")
+  st <- as.numeric(st)
+  d1$Study  <- st
+  
+  g <- str_split(t[2], "T", simplify = TRUE)
+  gr <- str_extract(g[1], "\\d")
+  gr <- as.numeric(gr)
+  d1$Group <- gr
+  
+  co <- str_split(filename, "_", simplify = TRUE)
+  con <- str_split(co[,4], "[[:punct:]]", simplify = TRUE)
+  con_2 <- con[,1]
+  d1$Condition <- con_2
+  
+  tr <- str_split(co[,3], "T", simplify = TRUE)
+  tr_1 <- tr[,2]
+  d1$Trial <- tr_1
 
-# plots plots plots
+  return(d1)
 
-# Remove bad data
+}
 
-# Save the data
+
+#We now test this function on a single file from study 4
+test_data2 <- data_preprocess_study4("dataStudy4/Study4_G1_T1_Synchronous.csv")
+
+
+#Now we can run the functions on the whole dataset using map_df
+phys_data = list.files(path = "data/", pattern = ".csv", full.names = T) %>%
+    purrr::map_df(data_preprocess)
+
+phys_data_2 = list.files(path = "dataStudy4/", pattern = ".csv", full.names = T) %>%
+    purrr::map_df(data_preprocess_study4)
+
+#Now we rbind the two dataframes into one 
+phys_data_all <- rbind(phys_data, phys_data_2)
+
+#Now we need to make sure all the data are meaningful or something has to be removed
+#E.g."Study1_G1_T1_Synchronous" has one bad respiration signal. We could replace it with NAs
+
+#We turn everything into ms and not seconds using an ifelse statement
+phys_data_all$time <- ifelse(phys_data_all$Study == 1, phys_data_all$time*1000, phys_data_all$time)
+phys_data_all$time <- ifelse(phys_data_all$Study == 2, phys_data_all$time*1000, phys_data_all$time)
+phys_data_all$time <- ifelse(phys_data_all$Study == 4, phys_data_all$time*1000, phys_data_all$time)
+
+#We make Group, Study, and Trial into factors
+phys_data_all$Group <- as.factor(phys_data_all$Group)
+phys_data_all$Study <- as.factor(phys_data_all$Study)
+phys_data_all$Trial <- as.factor(phys_data_all$Trial)
+
+#Now we plot the data
+plot_phys_resp <- ggplot(data = phys_data_all) +
+  geom_path(aes(time, Resp2)) +
+  labs(x = "Time", y = "Resp") +
+  theme(legend.position="bottom") +
+  facet_wrap(phys_data_all$Study == 1|2)
+
+plot_phys_resp
+
+plot_phys_HR <- ggplot(data = phys_data_all) +
+  geom_path(aes(time, HR1, color = File)) +
+  geom_path(aes(time, HR2, color = File)) +
+  labs(x = "Time", y = "Heart Rate") +
+  theme(legend.position="bottom") +
+  facet_wrap(phys_data_all$Study)
+
+plot_phys_HR
+
+#We see that the file S1_G1_T1_TurnTaking.csv has bad data and we have to remove it using the function that removes outliers that we made previously
+phys_data_clean <- phys_data_all #Making a new dataframe for our clean data
+
+#Removing outliers 
+phys_data_clean$HR2 <- removeOuts(phys_data_clean$HR2, 2.5)
+phys_data_clean$HR1 <- removeOuts(phys_data_clean$HR1, 2.5)
+phys_data_clean$Resp1 <- removeOuts(phys_data_clean$Resp1, 2.5)
+phys_data_clean$Resp2 <- removeOuts(phys_data_clean$Resp2, 2.5)
+
+plot_phys_resp <- ggplot(data = phys_data_clean) +
+  geom_path(aes(time, Resp1, color = Study)) +
+  geom_path(aes(time, Resp2, color = Study)) +
+  labs(x = "Time", y = "Resp") +
+  theme(legend.position="bottom")
+
+plot_phys_resp
+
+plot_phys_HR <- ggplot(data = phys_data_clean) +
+  geom_path(aes(time, HR1, color = Study)) +
+  geom_path(aes(time, HR2, color = Study)) +
+  labs(x = "Time", y = "Heart Rate") +
+  theme(legend.position="bottom") +
+  facet_wrap(phys_data_all$Study == 1|2)
+
+plot_phys_HR
+
+#Save the data into a csv-file
+write.csv(phys_data_clean, file = "physiological_data.csv")
+
 
 ```
 
@@ -310,9 +508,9 @@ Let's start with a multilevel model that accounts for
 
 The data needs to be further prepared, so we can analyze both participants in the same model.
 We need to turn the data into a long format:
-- a column indicating own hr and one own respiration
-- a column indicating other hr and one other respiration
-- a column indicating change in hr from previous round and one in respiration
+- a column indicating own HR and one own respiration
+- a column indicating other HR and one other respiration
+- a column indicating change in HR from previous round and one in respiration
 
 We can then run an analysis where change is a function of one's previous state (stability, see slides), and the other's previous state (coupling). Make sure to:
 - set up the most interesting contrasts: how do these parameters vary by condition? which condition should be baseline?
@@ -322,7 +520,6 @@ We can then run an analysis where change is a function of one's previous state (
 Bonus question: what if we include an additional layer? Is my heart rate just adjusting to yours, or also to how much you are adjusting to mine?
 - to start answering this we can add a column indicating the previous change in hr in the other and one in respiration
 - we can then build on the previous models by also adding the previous change in the other
-
 
 ```{r}
 
