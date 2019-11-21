@@ -89,10 +89,10 @@ single_plots_Resp <- gridExtra::grid.arrange(plot1_Resp, plot2_Resp, ncol = 2)
 
 #First we create a function that removes outliers
 removeOuts <- function(ts,threshold){
-  ts[ts > (mean(ts,na.rm=T) +
-             (threshold*sd(ts,na.rm=T))) | 
-       ts < (mean(ts,na.rm=T) -
-             (threshold*sd(ts,na.rm=T)))] = mean(ts,na.rm=T)
+  ts[ts > (mean(ts,na.rm=T) + (threshold*sd(ts,na.rm=T)))] = mean(ts,na.rm=T) +
+             (threshold*sd(ts,na.rm=T))
+  ts[ts < (mean(ts,na.rm=T) - (threshold*sd(ts,na.rm=T)))] = mean(ts,na.rm=T) -
+             (threshold*sd(ts,na.rm=T))
   return(ts)
 }
 threshold=2.5 # Default value at 2.5 sds from the mean
@@ -241,50 +241,6 @@ p5 <- ggplot(data = d1) +
 
 p5
 
-#Now we need to add the group, trial, condition to the cleaned up, scaled, downsampled data
-## Tip the info is in the file name
-
-#We need to split up the filename in order to get the information about group, trial, condition to the scaled downsampled data. We create a function that can do this for us for all of the filenames
-
-adding_stuff <- function(filename) {
-  
-#Load data
-sample <- read.csv(filename, header=TRUE, sep=",")
-
-#Parse filename to extract group, trials, condition - parsed is extracting things from filename into variables
-#Example of filename: Study1_G1_T1_Synchronous
-
-#First we want to split the whole file name before "G" so we can get the study
-t <- str_split(filename, "G", simplify = TRUE) #this will split the filename before "G". G dissapears when we split
-st <- str_extract(t[1], "\\d") #//d means that we only want numerics - thus we remove characters
-st <- as.numeric(st)
-data = data.frame(Study = st) #Now we create a new data frame where we create a new colum called "Study"
-
-#Now we want to get the group extracted from the filename, so we split up before T    
-g <- str_split(t[2], "T", simplify = TRUE) #this will split the filename before "T"
-gr <- str_extract(g[1], "\\d")
-gr <- as.numeric(gr)
-data = data.frame(Study = st, Group = gr) #we add a new column 
-
-#Now we want the condition
-co <- str_split(g[2], "[[:punct:]]", simplify = TRUE) # split before period
-con <- str_split(co[2], "_", simplify = TRUE)#we split before underscore
-con[2] <- as.character(con[2])
-data = data.frame(Study = st, Group = gr, Condition = con[2])
-
-#Now we want the trial   
-tr <- co[1]
-tr <- as.numeric(tr)
-data = data.frame(Study = st, Group = gr, Condition = co[2], Trial = tr, File = filename) #We add another column called filename in order to make it eaiser to merge it with another dataframe later
-    
-# combine all this data in one dataset
-return(data)
-
-}
-
-#We test the function on just one file
-test_data <- adding_stuff("data/Study1_G1_T1_Synchronous.csv")
-
 ```
 
 ## Now we are ready to go to load and pre-process all files
@@ -324,8 +280,17 @@ data_preprocess <- function(filename, threshold = 2.5){
   #Downsampling
   df$rownames <- (1:nrow(df))
   
+  t <- str_split(filename, "G", simplify = TRUE) 
+  st <- str_extract(t[1], "\\d") 
+  
+  if (st == "4"){ #In study 4 the time-column is called "TimeMs" which is different from all other studies. Therefore we tell the function to name the column "time" instead of "TimeMs" for study 4
+    df <- df %>% rename(
+      time = TimeMs
+    )
+  }
+  
   d1 = df %>%
-    group(n = 100, method = 'greedy') %>%
+    group(n = 1000, method = 'greedy') %>%
     dplyr::summarise(
       time = mean(time,na.rm=T),
       HR1 = mean(HR1_scaled,na.rm=T),
@@ -366,110 +331,43 @@ data_preprocess <- function(filename, threshold = 2.5){
 #We apply this function on a single file to test if it works
 test_data <- data_preprocess("data/Study1_G1_T2_TurnTaking.csv")
 
-#The function works, but we have noticed that in study 4 the column time is called "TimeMs" which is different from all other studies. Therefore we need to make a second function, that does the exact same things as the the function above, that can process the data from study 4 and then we can combine the dataframes afterward. 
-
-data_preprocess_study4 <- function(filename, threshold = 2.5){
-  
-  df <- read.csv(filename)
-  
-  #Remove outliers 
-  df$HR1_clean <- removeOuts(df$HR1, 2.5)
-  df$HR2_clean <- removeOuts(df$HR2, 2.5)
-  df$Resp1_clean <- removeOuts(df$Resp1, 2.5)
-  df$Resp2_clean <- removeOuts(df$Resp2, 2.5)
-  
-  #Scale
-  df$HR1_scaled <- scale(df$HR1_clean)
-  df$HR2_scaled <- scale(df$HR2_clean)
-  df$Resp1_scaled <- scale(df$Resp1_clean)
-  df$Resp2_scaled <- scale(df$Resp2_clean)
-  
-  #Downsampling
-  df$rownames <- (1:nrow(df))
-  
-  d1 = df %>%
-    group(n = 100, method = 'greedy') %>%
-    dplyr::summarise(
-      time = mean(TimeMs,na.rm=T)/1000, #We divide by 1000 because the data is in ms and we want it in s
-      HR1 = mean(HR1_scaled,na.rm=T),
-      HR2 = mean(HR2_scaled,na.rm=T),
-      Resp1 = mean(Resp1_scaled,na.rm=T),
-      Resp2 = mean(Resp2_scaled,na.rm=T),
-      File =filename,
-      rowname = rownames[1]) #the index we use to put them back together
-  
-  #Parsing the filenames
-  t <- str_split(filename, "G", simplify = TRUE)
-  st <- str_extract(t[1], "\\d")
-  st <- as.numeric(st)
-  d1$Study  <- st
-  
-  g <- str_split(t[2], "T", simplify = TRUE)
-  gr <- str_extract(g[1], "\\d")
-  gr <- as.numeric(gr)
-  d1$Group <- gr
-  
-  co <- str_split(filename, "_", simplify = TRUE)
-  con <- str_split(co[,4], "[[:punct:]]", simplify = TRUE)
-  con_2 <- con[,1]
-  d1$Condition <- con_2
-  
-  tr <- str_split(co[,3], "T", simplify = TRUE)
-  tr_1 <- tr[,2]
-  d1$Trial <- tr_1
-
-  return(d1)
-
-}
-
-
-#We now test this function on a single file from study 4
-test_data2 <- data_preprocess_study4("dataStudy4/Study4_G1_T1_Synchronous.csv")
-
-
 #Now we can run the functions on the whole dataset using map_df
 phys_data = list.files(path = "data/", pattern = ".csv", full.names = T) %>%
     purrr::map_df(data_preprocess)
-
-phys_data_2 = list.files(path = "dataStudy4/", pattern = ".csv", full.names = T) %>%
-    purrr::map_df(data_preprocess_study4)
-
-#Now we rbind the two dataframes into one 
-phys_data_all <- rbind(phys_data, phys_data_2)
 
 #Now we need to make sure all the data are meaningful or something has to be removed
 #E.g."Study1_G1_T1_Synchronous" has one bad respiration signal. We could replace it with NAs
 
 #We turn everything into ms and not seconds using an ifelse statement
-phys_data_all$time <- ifelse(phys_data_all$Study == 1, phys_data_all$time*1000, phys_data_all$time)
-phys_data_all$time <- ifelse(phys_data_all$Study == 2, phys_data_all$time*1000, phys_data_all$time)
-phys_data_all$time <- ifelse(phys_data_all$Study == 4, phys_data_all$time*1000, phys_data_all$time)
+phys_data$time <- ifelse(phys_data$Study == 1, phys_data$time*1000, phys_data$time)
+phys_data$time <- ifelse(phys_data$Study == 2, phys_data$time*1000, phys_data$time)
+phys_data$time <- ifelse(phys_data$Study == 4, phys_data$time*1000, phys_data$time)
 
 #We make Group, Study, and Trial into factors
-phys_data_all$Group <- as.factor(phys_data_all$Group)
-phys_data_all$Study <- as.factor(phys_data_all$Study)
-phys_data_all$Trial <- as.factor(phys_data_all$Trial)
+phys_data$Group <- as.factor(phys_data$Group)
+phys_data$Study <- as.factor(phys_data$Study)
+phys_data$Trial <- as.factor(phys_data$Trial)
 
 #Now we plot the data
-plot_phys_resp <- ggplot(data = phys_data_all) +
+plot_phys_resp <- ggplot(data = phys_data) +
   geom_path(aes(time, Resp2)) +
   labs(x = "Time", y = "Resp") +
   theme(legend.position="bottom") +
-  facet_wrap(phys_data_all$Study == 1|2)
+  facet_wrap(phys_data$Study == 1|2)
 
 plot_phys_resp
 
-plot_phys_HR <- ggplot(data = phys_data_all) +
+plot_phys_HR <- ggplot(data = phys_data) +
   geom_path(aes(time, HR1, color = File)) +
   geom_path(aes(time, HR2, color = File)) +
   labs(x = "Time", y = "Heart Rate") +
   theme(legend.position="bottom") +
-  facet_wrap(phys_data_all$Study)
+  facet_wrap(phys_data$Study)
 
 plot_phys_HR
 
 #We see that the file S1_G1_T1_TurnTaking.csv has bad data and we have to remove it using the function that removes outliers that we made previously
-phys_data_clean <- phys_data_all #Making a new dataframe for our clean data
+phys_data_clean <- phys_data #Making a new dataframe for our clean data
 
 #Removing outliers 
 phys_data_clean$HR2 <- removeOuts(phys_data_clean$HR2, 2.5)
@@ -490,13 +388,234 @@ plot_phys_HR <- ggplot(data = phys_data_clean) +
   geom_path(aes(time, HR2, color = Study)) +
   labs(x = "Time", y = "Heart Rate") +
   theme(legend.position="bottom") +
-  facet_wrap(phys_data_all$Study == 1|2)
+  facet_wrap(phys_data_clean$Study == 1|2) #
 
 plot_phys_HR
 
+#Remove bad data. We need to remove the flat signals in the data for both heart rate and respiration. In order to get a feel of where the bad data is (the flat signal) we plot the data one study at a time.
+#We only look at Heart rate because that is the only data we are going to analyze.
+
+#We plot the raw data and the clean data for all studies
+
+#First we look at study 1
+d1_raw <- filter(phys_data, Study == 1)
+
+d1_raw <- group_by(d1_raw, Group, Trial) %>% 
+  mutate(time1 = seq(n())) #mutate creates a new column, time1, and seq() starts over each time
+
+ggplot(data = d1_raw) + geom_line(aes(time1, HR1, color= "red")) + 
+  geom_line(aes(time1, HR2, color= "blue")) + 
+  facet_wrap(Group~Trial)
+
+d1_clean <- filter(phys_data_clean, Study == 1)
+
+d1_clean <- group_by(d1_clean, Group, Trial) %>% 
+  mutate(time1 = seq(n())) #mutate creates a new column, time1, and seq() starts over each time
+
+ggplot(data = d1_clean) + geom_line(aes(time1, HR1, color= "red")) + 
+  geom_line(aes(time1, HR2, color= "blue")) + 
+  facet_wrap(Group~Trial)
+
+#When you look at the plot, the first number (top number) is the group and the second number (bottom number) is trial
+
+#When we look at the data from study 1 there is no flat lining, which is good
+
+#Now we look at study 2
+d2_raw <- filter(phys_data, Study == 2)
+
+d2_raw <- group_by(d2_raw, Group, Trial) %>% 
+  mutate(time1 = seq(n()))
+
+ggplot(data = d2_raw) + geom_line(aes(time1, HR1, color= "red")) + 
+  geom_line(aes(time1, HR2, color= "blue")) + 
+  facet_wrap(Group~Trial)
+
+d2_clean <- filter(phys_data_clean, Study == 2)
+
+d2_clean <- group_by(d2_clean, Group, Trial) %>% 
+  mutate(time1 = seq(n()))
+
+ggplot(data = d2_clean) + geom_line(aes(time1, HR1, color= "red")) + 
+  geom_line(aes(time1, HR2, color= "blue")) + 
+  facet_wrap(Group~Trial)
+
+#In this plot (study 2) we can see that there is flat linining in group 6, trial 3 and an artefact in group 9, trial 1. We need to assign NAs to these bad signals.
+
+#Now we look at study 3
+d3_raw <- filter(phys_data, Study == 3)
+
+d3_raw <- group_by(d3_raw, Group, Trial) %>% 
+  mutate(time1 = seq(n()))
+
+ggplot(data = d3_raw) + geom_line(aes(time1, HR1, color= "red")) +
+  xlim(0,250) +
+  geom_line(aes(time1, HR2, color= "blue")) + 
+  facet_wrap(Group~Trial)
+
+d3_clean <- filter(phys_data_clean, Study == 3)
+
+d3_clean <- group_by(d3_clean, Group, Trial) %>% 
+  mutate(time1 = seq(n()))
+
+ggplot(data = d3_clean) + geom_line(aes(time1, HR1, color= "red")) + 
+  xlim(0,250) +
+  geom_line(aes(time1, HR2, color= "blue")) + 
+  facet_wrap(Group~Trial)
+
+#When we look at study 3 it all looks good.
+
+#Now we look at study 4
+d4_raw <- filter(phys_data, Study == 4)
+
+d4_raw <- group_by(d4_raw, Group, Trial) %>% 
+  mutate(time1 = seq(n()))
+
+ggplot(data = d4_raw) + geom_line(aes(time1, HR1, color= "red")) + 
+  geom_line(aes(time1, HR2, color= "blue")) + 
+  facet_wrap(Group~Trial)
+
+d4_clean <- filter(phys_data_clean, Study == 4)
+
+d4_clean <- group_by(d4_clean, Group, Trial) %>% 
+  mutate(time1 = seq(n()))
+
+ggplot(data = d4_clean) + geom_line(aes(time1, HR1, color= "red")) + 
+  geom_line(aes(time1, HR2, color= "blue")) + 
+  facet_wrap(Group~Trial)
+
+#When we look at study 4 it all looks good.
+
+#We should be careful to remove good data - the solution is to replace bad data with NA and then remove the NAs. When we report, we should remember to count the number of participants - the number that the count function gives us is not the actual number, because we have removed the data from the participants with NAs.
+
+##REMOVING BAD DATA FOR HEART RATE##
+#We replace the bad signal (flat signals) with NAs for a particular study, group, trial, condition etc.
+
+#First we make a dataframe containing the data from the study where the bad signal is (this is in study 2, group 6 and trial 3)
+phys_data_bad <- filter(phys_data_clean, Study == 2, Group == 6, Trial == 3)
+
+#Now we plot the data so we are able to see in which time interval this bad data is in
+ggplot(data = phys_data_bad) + geom_line(aes(time, HR1, color= "red")) +
+  geom_line(aes(time, HR2, color= "blue")) 
+
+#We can see that the bad signal start at 24200 and ends at 26600. This is where we need to replace the signal with NAs. Thus, we replace this internal with NAs because this is bad data.
+phys_data_clean$HR2[phys_data_clean$Study == 2 & phys_data_clean$Group == 6 & phys_data_clean$Trial == 3 & phys_data_clean$time > 24200 & phys_data_clean$time < 26600] <- NA
+
+
+#There is also a bad signal in study 2, group 9, trial 1. We make a dataframe containing the data from this specific study, group and trial.
+phys_data_bad <- filter(phys_data_clean, Study == 2, Group == 9, Trial == 1)
+
+#Now we plot the data so we are able to see in which time interval this bad data is in
+ggplot(data = phys_data_bad) + geom_line(aes(time, HR1, color= "red")) +
+  geom_line(aes(time, HR2, color= "blue")) 
+
+#We can see that the bad signal start at 0 and ends at 1000. This is where we need to replace the signal with NAs. Thus, we replace this internal with NAs because this is bad data.
+phys_data_clean$HR2[phys_data_clean$Study == 2 & phys_data_clean$Group == 9 & phys_data_clean$Trial == 1 & phys_data_clean$time > 0 & phys_data_clean$time < 1000] <- NA
+
+##LOOKING AT RESPIRATION##
+#We plot the raw data and the clean data for all studies
+
+#First we look at study 1
+d1_raw <- filter(phys_data, Study == 1)
+
+d1_raw <- group_by(d1_raw, Group, Trial) %>% 
+  mutate(time1 = seq(n())) #mutate creates a new column, time1, and seq() starts over each time
+
+ggplot(data = d1_raw) + geom_line(aes(time1, Resp1, color= "red")) + 
+  geom_line(aes(time1, Resp2, color= "blue")) + 
+  facet_wrap(Group~Trial)
+
+d1_clean <- filter(phys_data_clean, Study == 1)
+
+d1_clean <- group_by(d1_clean, Group, Trial) %>% 
+  mutate(time1 = seq(n())) #mutate creates a new column, time1, and seq() starts over each time
+
+ggplot(data = d1_clean) + geom_line(aes(time1, Resp1, color= "red")) + 
+  geom_line(aes(time1, Resp2, color= "blue")) + 
+  facet_wrap(Group~Trial)
+
+#We can see thatt there is a lot of bad signals. We need to assing NAs to these.
+
+#Now we look at study 2
+d2_raw <- filter(phys_data, Study == 2)
+
+d2_raw <- group_by(d2_raw, Group, Trial) %>% 
+  mutate(time1 = seq(n()))
+
+ggplot(data = d2_raw) + geom_line(aes(time1, Resp1, color= "red")) + 
+  geom_line(aes(time1, Resp2, color= "blue")) + 
+  facet_wrap(Group~Trial)
+
+d2_clean <- filter(phys_data_clean, Study == 2)
+
+d2_clean <- group_by(d2_clean, Group, Trial) %>% 
+  mutate(time1 = seq(n()))
+
+ggplot(data = d2_clean) + geom_line(aes(time1, Resp1, color= "red")) + 
+  geom_line(aes(time1, Resp2, color= "blue")) + 
+  facet_wrap(Group~Trial)
+
+#Now we look at study 3
+d3_raw <- filter(phys_data, Study == 3)
+
+d3_raw <- group_by(d3_raw, Group, Trial) %>% 
+  mutate(time1 = seq(n()))
+
+ggplot(data = d3_raw) + geom_line(aes(time1, Resp1, color= "red")) +
+  xlim(0,250) +
+  geom_line(aes(time1, Resp2, color= "blue")) + 
+  facet_wrap(Group~Trial)
+
+d3_clean <- filter(phys_data_clean, Study == 3)
+
+d3_clean <- group_by(d3_clean, Group, Trial) %>% 
+  mutate(time1 = seq(n()))
+
+ggplot(data = d3_clean) + geom_line(aes(time1, Resp1, color= "red")) + 
+  xlim(0,250) +
+  geom_line(aes(time1, Resp2, color= "blue")) + 
+  facet_wrap(Group~Trial)
+
+#Now we look at study 4
+d4_raw <- filter(phys_data, Study == 4)
+
+d4_raw <- group_by(d4_raw, Group, Trial) %>% 
+  mutate(time1 = seq(n()))
+
+ggplot(data = d4_raw) + geom_line(aes(time1, Resp1, color= "red")) + 
+  geom_line(aes(time1, Resp2, color= "blue")) + 
+  facet_wrap(Group~Trial)
+
+d4_clean <- filter(phys_data_clean, Study == 4)
+
+d4_clean <- group_by(d4_clean, Group, Trial) %>% 
+  mutate(time1 = seq(n()))
+
+ggplot(data = d4_clean) + geom_line(aes(time1, Resp1, color= "red")) + 
+  geom_line(aes(time1, Resp2, color= "blue")) + 
+  facet_wrap(Group~Trial)
+
+##REMOVING BAD DATA: RESPIRATION##
+#Study 1
+phys_data_clean$Resp1[phys_data_clean$Study == 1 & phys_data_clean$Group == 1 & phys_data_clean$Trial == 1] <- NA
+
+phys_data_clean$Resp1[phys_data_clean$Study == 1 & phys_data_clean$Group == 1 & phys_data_clean$Trial == 2] <- NA
+
+phys_data_clean$Resp2[phys_data_clean$Study == 1 & phys_data_clean$Group == 2 & phys_data_clean$Trial == 1] <- NA
+
+phys_data_clean$Resp2[phys_data_clean$Study == 1 & phys_data_clean$Group == 2 & phys_data_clean$Trial == 2] <- NA
+
+#In study 3, group 2, trial 2, there is a flatlining that we need to remove. We need to plot it first in order to see in which time interval it is in. 
+phys_data_bad <- filter(phys_data_clean, Study == 3, Group == 9, Trial == 2)
+
+#Now we plot the data so we are able to see in which time interval this bad data is in
+ggplot(data = phys_data_bad) + geom_line(aes(time, Resp1, color= "red")) +
+  geom_line(aes(time, HR2, color= "blue")) 
+
+#Now that we can see in which interval the flat signal is in we can replace the interval with NAs
+phys_data_clean$Resp1[phys_data_clean$Study == 3 & phys_data_clean$Group == 9 & phys_data_clean$Trial == 2 & phys_data_clean$time > 2330000 & phys_data_clean$time < 2550000] <- NA
+
 #Save the data into a csv-file
 write.csv(phys_data_clean, file = "physiological_data.csv")
-
 
 ```
 
@@ -521,21 +640,231 @@ Bonus question: what if we include an additional layer? Is my heart rate just ad
 - to start answering this we can add a column indicating the previous change in hr in the other and one in respiration
 - we can then build on the previous models by also adding the previous change in the other
 
+##NOTES FROM CLASS##
+Now that we have cleaned the data and preprocessed it we can now make a model. We take the modelS from the paper and try to understand it and write it up in a way that is more simple to us. These are the models/equations from the paper:
+
+Participant 1:
+dx/dt = a1(x* - xt) + a2(yt - x*)
+
+Participant 2:
+dy/dt = b1(y* - yt) + b2 (xt - y*)
+
+The equations describe change. How things change over time:
+
+- dx means that "change of x" over the "change of time". Thus, we look at how heart rate changes from t0 to t1 - this could also be writte as ∆HR1 in the first equation (participant 1) and ∆HR2 in the second equation (participant 2). 
+
+- a1 is a parameter that needs to be estimated, while xt is the heart rate at a given time (baseline). Thus, a1 is a beta-value.
+
+- x* is the baseline reference (the mean which is set to 0). Thus, the x* in the equations are 0, which means that we can just remove them from the equation.
+
+Remember that stability, how our own heart rate is dependent on itself, is negative if it gets pulled towards the reference, which means that the higher the heart rate is compared to the reference the more it is being pulled towards the reference. Negative stability is "stable" (moving towards the reference), and postive stability is "unstable"  (moving away from the reference). Therefore, we need a minus infront of the HR1 (we could also remove this minus, but then we would have to remember to interpret the beta in the opposite way). Beta is the slope, the change from baseline, and if it is postive it moves away from the reference which results in a heart rate that moves away from the reference and vice versa. A stable (negative) beta means that the heart rate will move closer to the baseline, while an unstable (positive) beta means that heart rate will move away from the baseline.
+
+Thus, we can simplify the equation and write it like this:
+
+y ~ b1(- HR1) + b2(HR2)
+
+If we remove the minus in front of HR1 we need to just keep it in mind when we interpret the values. 
+When we take lmer (because the outcome is "change" we use lmer and not glmer because the outcome is not categorical but numeric. Change is a continous variable and therefore we use lmer and not glmer). 
+
+y ~ b1(HR1) + b2(HR2)
+
+Now we use lmer:
+lmer(∆HR1 ~ HR1 + HR2) #this says that change in HR1 is a function of HR1 plus HR2
+
+We fit the model and get an output. HR1 (stability) and HR2 (coupling) are two parameters. Thus, the higher the heart rate goes in person 2, the higher the heart goes in person 1. The higher the heart rate of person 1 (stability) the higher the heart rate is going to go (positive beta) which means that the more it moves away from the baseline/reference, BUT remember that there is actually a minus sign infront of the HR1 which means that it is actually the other way around - the higher the heart rate in person 1 (stability) the more the heart rate will move towards the baseline (negative beta).
+
+We want to estimate the same parameters for both participant 1 and participant 2. Therefore we do multilevel modeliing - all the data from participant 1 and all the data from participant 2 in a long format dataframe. Thus, we jsut use one equation in a multilevel model, and therefore we estimate the parameters for both participants just using one equation in a multilevel model. Thus, our model now looks like:
+
+lmer(∆HRp ~ HRp + HRo)
+
+Now our equation does not specify a certain participant but it can be used for both participant 1 and 2.
+
+There is an equation that describes that two pendulums over time move out of sync. This equation is very complex, but we can turn this equation into a lmer - a linear model. It describes "acceleration" in change (second derivative) - how fast you are changing the change. The change in change is the heart rate at time2 minus the heart rate at time 1. This tells us about the acceleration of the heart rate (the change of the change). 
+
+Thus, we turn the complex equation into a simple lmer model:
+
+∆∆HR1 ~ -b1∆HR1 - b2HR1 - b3HR2 
+
+We can remove the minus signs and instead write -1 in the end:
+
+∆∆HR1 ~ b1∆HR1 + b2HR1 + b3HR2 -1
+
+NB! ∆∆HR1 is a change in change (acceleration). It could also be written as y. 
+
+
+This is the model we want to fit:
+
+lmer(HR - change ~ HR + HRother)
+
+We do not want two equations, one for each participant, for two reasons:
+1. We want to keep things simple
+2. We can do partial pooling when we only have one equation. 
+
+The first thing we need to do is to calculate the HRchange - how much HR differs from the previous HR. This can be done using 
+
+HR1_future/lead =  lead(HR1, 1) #1 is the delay/lag - which means that it shifts it one time point
+
+Thus, we are creating a new column HR_lead which is shifted in time. We are doing this in order to subtract the previous HR from the lead/"future" heart rate. 
+
+HR_change = HR1_lead - HR1
+
 ```{r}
+#We are only going to do the analysis on study 4 (the data from our year).
+phys_data_2019 <- filter(phys_data_clean, Study == 4)
 
-# Genearate a column for each: previous HR1, HR2, Resp1, Resp2
-# Genearate a column for each: change in HR1, HR2, Resp1, Resp2
+#Genearate a column for each: lead HR1, HR2, Resp1, Resp2
+phys_data_2019$HR1_lead <- lead(phys_data_2019$HR1, 1)
 
+phys_data_2019$HR2_lead <- lead(phys_data_2019$HR2, 1)
 
-# Make the data long, so we can analyze both participants at the same time 
-## N.B. This is a bit tricky and you might have to do it in several steps
+phys_data_2019$Resp1_lead <- lead(phys_data_2019$Resp1, 1)
 
-# Set the most interesting contrast e.g. by defining synchronous or conversation as the baseline
+phys_data_2019$Resp2_lead <- lead(phys_data_2019$Resp2, 1)
 
-# Model change as a function of own and other previous state 
+#Genearate a column for each: change in HR1, HR2, Resp1, Resp2
+phys_data_2019$HR1_change <- phys_data_2019$HR1_lead - phys_data_2019$HR1
 
+phys_data_2019$HR2_change <- phys_data_2019$HR2_lead - phys_data_2019$HR2
 
-# Bonus points: Add to the previous model also change in the other to see whether my adaptation is influenced by the other's adaptation.
+phys_data_2019$Resp1_change <- phys_data_2019$Resp1_lead - phys_data_2019$Resp1
+
+phys_data_2019$Resp2_change <- phys_data_2019$Resp2_lead - phys_data_2019$Resp2
+
+#Make the data long, so we can analyze both participants at the same time 
+#N.B. This is a bit tricky and you might have to do it in several steps
+
+#We create the dataframes that we need.
+HR_change_self <- 
+  gather(phys_data_2019, # data
+         participant, HR_change_self, #new vars
+         HR1_change, HR2_change) %>% #old vars 
+         select( # drop irrelevant vars
+           time, HR_change_self, participant, Study, Group, Condition, Trial) %>%
+           mutate( # create unique participant ID
+             participant = parse_number(as.character(Group)) * 10 +
+               parse_number(participant))
+
+HR_change_other <- 
+  gather(phys_data_2019, # data
+         participant, HR_change_other, #new vars
+         HR2_change, HR1_change) %>% #old vars 
+         select( # drop irrelevant vars
+           time, HR_change_other, participant, Study, Group, Condition, Trial) %>%
+           mutate( # create unique participant ID
+             participant = parse_number(as.character(Group)) * 10 +
+               parse_number(participant))
+HR_self <- 
+  gather(phys_data_2019, # data
+         participant, HR_self, #new vars
+         HR1, HR2) %>% #old vars 
+         select( # drop irrelevant vars
+           time, HR_self, participant, Study, Group, Condition, Trial) %>%
+           mutate( # create unique participant ID
+             participant = parse_number(as.character(Group)) * 10 +
+               parse_number(participant))
+
+HR_other <- 
+  gather(phys_data_2019, # data
+         participant, HR_other, #new vars
+         HR2, HR1) %>% #old vars 
+         select( # drop irrelevant vars
+           time, HR_other, participant, Study, Group, Condition, Trial) %>%
+           mutate( # create unique participant ID
+             participant = parse_number(as.character(Group)) * 10 +
+               parse_number(participant))
+
+HR_lead <- 
+  gather(phys_data_2019, # data
+         participant, HR_lead, #new vars
+         HR1_lead, HR2_lead) %>% #old vars 
+         select( # drop irrelevant vars
+           time, HR_lead, participant, Study, Group, Condition, Trial) %>%
+           mutate( # create unique participant ID
+             participant = parse_number(as.character(Group)) * 10 +
+               parse_number(participant))
+
+Resp_change_self <- 
+  gather(phys_data_2019, # data
+         participant, Resp_change_self, # new vars 
+         Resp1_change, Resp2_change) %>% #old vars
+         select( # drop irrelevant vars
+           time, Resp_change_self, participant, Study, Group, Condition, Trial) %>%
+           mutate( # create unique participant ID
+             participant = parse_number(as.character(Group)) * 10 +
+               parse_number(participant))
+
+Resp_change_other <- 
+  gather(phys_data_2019, # data
+         participant, Resp_change_other, # new vars 
+         Resp2_change, Resp1_change) %>% #old vars
+         select( # drop irrelevant vars
+           time, Resp_change_other, participant, Study, Group, Condition, Trial) %>%
+           mutate( # create unique participant ID
+             participant = parse_number(as.character(Group)) * 10 +
+               parse_number(participant))
+
+Resp_self <- 
+  gather(phys_data_2019, # data
+         participant, Resp_self, # new vars 
+         Resp1, Resp2) %>% #old vars
+         select( # drop irrelevant vars
+           time, Resp_self, participant, Study, Group, Condition, Trial) %>%
+           mutate( # create unique participant ID
+             participant = parse_number(as.character(Group)) * 10 +
+               parse_number(participant))
+
+Resp_other <- 
+  gather(phys_data_2019, # data
+         participant, Resp_other, # new vars 
+         Resp2, Resp1) %>% #old vars
+         select( # drop irrelevant vars
+           time, Resp_other, participant, Study, Group, Condition, Trial) %>%
+           mutate( # create unique participant ID
+             participant = parse_number(as.character(Group)) * 10 +
+               parse_number(participant))
+
+Resp_lead <- 
+  gather(phys_data_2019, # data
+         participant, Resp_lead, #new vars
+         Resp1_lead, Resp2_lead) %>% #old vars 
+         select( # drop irrelevant vars
+           time, Resp_lead, participant, Study, Group, Condition, Trial) %>%
+           mutate( # create unique participant ID
+             participant = parse_number(as.character(Group)) * 10 +
+               parse_number(participant))
+
+#Now we merge them
+merged_data1 <- merge(HR_change_self, HR_change_other, all=T, by = c("time", "Study", "Trial", "Group", "participant", "Condition")) 
+
+merged_data2 <- merge(HR_self, HR_other, all = T, by = c("time", "Study", "Trial", "Group", "participant", "Condition"))
+
+merged_data3 <- merge(HR_lead, Resp_change_self, all = T, by = c("time", "Study", "Trial", "Group", "participant", "Condition"))
+
+merged_data4 <- merge(Resp_change_other, Resp_self, all = T, by = c("time", "Study", "Trial", "Group", "participant", "Condition"))
+
+merged_data5 <- merge(Resp_other, Resp_lead, all = T, by = c("time", "Study", "Trial", "Group", "participant", "Condition"))
+
+phys_data_long1 <- merge(merged_data1, merged_data2, all = T, by = c("time", "Study", "Trial", "Group", "participant", "Condition" ))
+
+phys_data_long2 <- merge(phys_data_long1, merged_data3, all = T, by = c("time", "Study", "Trial", "Group", "participant", "Condition"))
+
+phys_data_long3 <- merge(phys_data_long2, merged_data4, all = T, by = c("time", "Study", "Trial", "Group", "participant", "Condition"))
+
+phys_data_long <- merge(phys_data_long3, merged_data5, all = T, by = c("time", "Study", "Trial", "Group", "participant", "Condition"))
+
+#Set the most interesting contrast e.g. by defining synchronous or conversation as the baseline
+#we set the baseline to "movementguided"
+phys_data_long$Condition <- as.factor(phys_data_long$Condition)
+phys_data_long$Condition <- relevel(phys_data_long$Condition, ref="MovementGuided")
+
+#Model change as a function of own and other previous state
+model <- lmer(HR_change_self ~ 0 + (HR_self + HR_other) : Condition +
+                (0 + Condition|participant) +
+                (0 + Condition|Group), data = phys_data_long)
+
+summary(model)
+
+#Bonus points: Add to the previous model also change in the other to see whether my adaptation is influenced by the other's adaptation.
 
 ```
 
@@ -550,11 +879,11 @@ Shuffled controls break the temporal dependencies of time-series by shuffling th
 Tip: sample() is your friend, but make sure to shuffle things within participant/condition and not throughout the whole dataset
  
 ```{r}
+#Create a shuffled dataset
 
-# Create a shuffled dataset
-# Concatenate it to the original dataset (and remember to have a column telling you which is which)
+#Concatenate it to the original dataset (and remember to have a column telling you which is which)
 
-# Create the same models as in the previous chunk, but adding an interaction by shuffled vs. real
+#Create the same models as in the previous chunk, but adding an interaction by shuffled vs. real
 
 ```
  
@@ -563,16 +892,13 @@ Tip: sample() is your friend, but make sure to shuffle things within participant
  - Per each real pair, identify at least one surrogate pair (matching one of the participants, with somebody doing the same task, but in a different pair)
 
 ```{r}
+#Identify unique pairs within a given study (to keep things manageable) and create list of possible surrogate pairs (e.g. individual 1 from pair 1 and individual 2 from pair 2)
 
-# Identify unique pairs within a given study (to keep things manageable) and create list of possible surrogate pairs (e.g. individual 1 from pair 1 and individual 2 from pair 2)
+#Starting from the wide format, create "surrogate" dataset with the data from surrogate pairs
 
-# Starting from the wide format, create "surrogate" dataset with the data from surrogate pairs
+#Make it into long format
 
-# Make it into long format
-
-# Create models as in chunks above, but adding an interaction with the Real vs. Surrogate variable (exclude shuffled ones for simplicity)
-
-
+#Create models as in chunks above, but adding an interaction with the Real vs. Surrogate variable (exclude shuffled ones for simplicity)
 
 ```
  
