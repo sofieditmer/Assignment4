@@ -55,7 +55,7 @@ N.B. to give you a bit more data I included data from previous years (Study1, St
 ```{r}
 # Load the libraries
 library(pacman)
-pacman::p_load(tidyverse, dplyr, purrr, lme4, lmerTest, DescTools, sjstats, tidymodels, groupdata2, cvms, randomForest, ggplot2, caret)
+pacman::p_load(tidyverse, dplyr, purrr, lme4, lmerTest, DescTools, sjstats, tidymodels, groupdata2, cvms, randomForest, ggplot2, caret, stats, quantmod)
 
 # Load the file
 single_file <- read.csv("data/Study1_G1_T1_Synchronous.csv")
@@ -348,6 +348,7 @@ phys_data$Group <- as.factor(phys_data$Group)
 phys_data$Study <- as.factor(phys_data$Study)
 phys_data$Trial <- as.factor(phys_data$Trial)
 
+##PLOTTING: HEART RATE##
 #Now we plot the data
 plot_phys_resp <- ggplot(data = phys_data) +
   geom_path(aes(time, Resp2)) +
@@ -392,6 +393,7 @@ plot_phys_HR <- ggplot(data = phys_data_clean) +
 
 plot_phys_HR
 
+##ASSESSING BAD DATA##
 #Remove bad data. We need to remove the flat signals in the data for both heart rate and respiration. In order to get a feel of where the bad data is (the flat signal) we plot the data one study at a time.
 #We only look at Heart rate because that is the only data we are going to analyze.
 
@@ -487,8 +489,8 @@ ggplot(data = d4_clean) + geom_line(aes(time1, HR1, color= "red")) +
 
 #We should be careful to remove good data - the solution is to replace bad data with NA and then remove the NAs. When we report, we should remember to count the number of participants - the number that the count function gives us is not the actual number, because we have removed the data from the participants with NAs.
 
-##REMOVING BAD DATA FOR HEART RATE##
-#We replace the bad signal (flat signals) with NAs for a particular study, group, trial, condition etc.
+##REMOVING BAD DATA: HEART RATE##
+#We replace the bad signalS with NAs for a particular study, group, trial, condition etc.
 
 #First we make a dataframe containing the data from the study where the bad signal is (this is in study 2, group 6 and trial 3)
 phys_data_bad <- filter(phys_data_clean, Study == 2, Group == 6, Trial == 3)
@@ -500,7 +502,6 @@ ggplot(data = phys_data_bad) + geom_line(aes(time, HR1, color= "red")) +
 #We can see that the bad signal start at 24200 and ends at 26600. This is where we need to replace the signal with NAs. Thus, we replace this internal with NAs because this is bad data.
 phys_data_clean$HR2[phys_data_clean$Study == 2 & phys_data_clean$Group == 6 & phys_data_clean$Trial == 3 & phys_data_clean$time > 24200 & phys_data_clean$time < 26600] <- NA
 
-
 #There is also a bad signal in study 2, group 9, trial 1. We make a dataframe containing the data from this specific study, group and trial.
 phys_data_bad <- filter(phys_data_clean, Study == 2, Group == 9, Trial == 1)
 
@@ -511,7 +512,7 @@ ggplot(data = phys_data_bad) + geom_line(aes(time, HR1, color= "red")) +
 #We can see that the bad signal start at 0 and ends at 1000. This is where we need to replace the signal with NAs. Thus, we replace this internal with NAs because this is bad data.
 phys_data_clean$HR2[phys_data_clean$Study == 2 & phys_data_clean$Group == 9 & phys_data_clean$Trial == 1 & phys_data_clean$time > 0 & phys_data_clean$time < 1000] <- NA
 
-##LOOKING AT RESPIRATION##
+##PLOTTING: RESPIRATION##
 #We plot the raw data and the clean data for all studies
 
 #First we look at study 1
@@ -527,13 +528,13 @@ ggplot(data = d1_raw) + geom_line(aes(time1, Resp1, color= "red")) +
 d1_clean <- filter(phys_data_clean, Study == 1)
 
 d1_clean <- group_by(d1_clean, Group, Trial) %>% 
-  mutate(time1 = seq(n())) #mutate creates a new column, time1, and seq() starts over each time
+  mutate(time1 = seq(n()))
 
 ggplot(data = d1_clean) + geom_line(aes(time1, Resp1, color= "red")) + 
   geom_line(aes(time1, Resp2, color= "blue")) + 
   facet_wrap(Group~Trial)
 
-#We can see thatt there is a lot of bad signals. We need to assing NAs to these.
+#We can see that there is a lot of bad signals. We need to assign NAs to these.
 
 #Now we look at study 2
 d2_raw <- filter(phys_data, Study == 2)
@@ -596,18 +597,18 @@ ggplot(data = d4_clean) + geom_line(aes(time1, Resp1, color= "red")) +
 
 ##REMOVING BAD DATA: RESPIRATION##
 #Study 1
-phys_data_clean$Resp1[phys_data_clean$Study == 1 & phys_data_clean$Group == 1 & phys_data_clean$Trial == 1] <- NA
+phys_data_clean$Resp1[phys_data_clean$Study == 1 & phys_data_clean$Group == 1 & phys_data_clean$Trial == 1] <- NA #study 1, group 1, trial 1
 
-phys_data_clean$Resp1[phys_data_clean$Study == 1 & phys_data_clean$Group == 1 & phys_data_clean$Trial == 2] <- NA
+phys_data_clean$Resp1[phys_data_clean$Study == 1 & phys_data_clean$Group == 1 & phys_data_clean$Trial == 2] <- NA #study 1, group 1, trial 2
 
-phys_data_clean$Resp2[phys_data_clean$Study == 1 & phys_data_clean$Group == 2 & phys_data_clean$Trial == 1] <- NA
+phys_data_clean$Resp2[phys_data_clean$Study == 1 & phys_data_clean$Group == 2 & phys_data_clean$Trial == 1] <- NA #study 1, group 2, trial 1
 
-phys_data_clean$Resp2[phys_data_clean$Study == 1 & phys_data_clean$Group == 2 & phys_data_clean$Trial == 2] <- NA
+phys_data_clean$Resp2[phys_data_clean$Study == 1 & phys_data_clean$Group == 2 & phys_data_clean$Trial == 2] <- NA #study 1, group 2, trial 2
 
 #In study 3, group 2, trial 2, there is a flatlining that we need to remove. We need to plot it first in order to see in which time interval it is in. 
 phys_data_bad <- filter(phys_data_clean, Study == 3, Group == 9, Trial == 2)
 
-#Now we plot the data so we are able to see in which time interval this bad data is in
+#Now we plot the data so we are able to see in which time interval this bad data (flatlining) is in
 ggplot(data = phys_data_bad) + geom_line(aes(time, Resp1, color= "red")) +
   geom_line(aes(time, HR2, color= "blue")) 
 
@@ -733,14 +734,14 @@ phys_data_2019$Resp2_change <- phys_data_2019$Resp2_lead - phys_data_2019$Resp2
 #Make the data long, so we can analyze both participants at the same time 
 #N.B. This is a bit tricky and you might have to do it in several steps
 
-#We create the dataframes that we need.
+#We create the new columns (variables) that we need
 HR_change_self <- 
-  gather(phys_data_2019, # data
+  gather(phys_data_2019, #data
          participant, HR_change_self, #new vars
          HR1_change, HR2_change) %>% #old vars 
-         select( # drop irrelevant vars
+         select( #drop irrelevant vars
            time, HR_change_self, participant, Study, Group, Condition, Trial) %>%
-           mutate( # create unique participant ID
+           mutate( #create unique participant ID
              participant = parse_number(as.character(Group)) * 10 +
                parse_number(participant))
 
@@ -763,10 +764,15 @@ HR_self <-
              participant = parse_number(as.character(Group)) * 10 +
                parse_number(participant))
 
-HR_other <- 
-  gather(phys_data_2019, # data
-         participant, HR_other, #new vars
-         HR2, HR1) %>% #old vars 
+HR_other <-
+  phys_data_2019 %>%
+  mutate(
+    HR1o=HR2, #we use mutate to make sure that it takes HR2 before HR1
+    HR2o=HR1
+  ) %>%
+  gather( # data
+         participant, HR_other, # new vars 
+         HR1o, HR2o) %>% #old vars
          select( # drop irrelevant vars
            time, HR_other, participant, Study, Group, Condition, Trial) %>%
            mutate( # create unique participant ID
@@ -833,7 +839,7 @@ Resp_lead <-
              participant = parse_number(as.character(Group)) * 10 +
                parse_number(participant))
 
-#Now we merge them
+#Now we merge them (we can only merge two at a time)
 merged_data1 <- merge(HR_change_self, HR_change_other, all=T, by = c("time", "Study", "Trial", "Group", "participant", "Condition")) 
 
 merged_data2 <- merge(HR_self, HR_other, all = T, by = c("time", "Study", "Trial", "Group", "participant", "Condition"))
@@ -852,22 +858,91 @@ phys_data_long3 <- merge(phys_data_long2, merged_data4, all = T, by = c("time", 
 
 phys_data_long <- merge(phys_data_long3, merged_data5, all = T, by = c("time", "Study", "Trial", "Group", "participant", "Condition"))
 
-#Set the most interesting contrast e.g. by defining synchronous or conversation as the baseline
-#we set the baseline to "movementguided"
+#We set the most interesting contrast e.g. by defining the baseline. We set the baseline to "movementguided"
 phys_data_long$Condition <- as.factor(phys_data_long$Condition)
 phys_data_long$Condition <- relevel(phys_data_long$Condition, ref="MovementGuided")
 
-#Model change as a function of own and other previous state
-model <- lmer(HR_change_self ~ 0 + (HR_self + HR_other) : Condition +
-                (0 + Condition|participant) +
+#We create a model looking at heart rate change as a function of own and other previous heart rate state
+#Why are we modelling heart rate change instead of the future/lead heart rate?
+#Answer: because biological and dynamic systems are about change. We look at the change compared to the previous state which allows us to investigate the stabilization and run-away effect - the further from the baseline the heart rate is, the change tells us if the heart rate is going to move further away from the baseline or closer to the baseline. We look at change in order to assess this. If we were to look at future heart rate instead, we would answer another question. 
+
+model_1 <- lmer(HR_change_self ~ 0 + Condition + 
+                (HR_self + HR_other) : Condition + 
+                (0 + Condition|participant) + 
                 (0 + Condition|Group), data = phys_data_long)
 
-summary(model)
+summary(model_1)
+
+#We make the model using * in order to check the significance of the coupling-parameters
+model_2 <- lmer(HR_change_self ~ 0 + Condition + 
+                (HR_self + HR_other) * Condition + 
+                  (0 + Condition|participant) + 
+                  (0 + Condition|Group), data = phys_data_long)
+
+summary(model_2)
+
+#Note that our model is saying that whenever HR_self is above baseline, HR_other will also be pulled away from baseline. 
+
+##Looking at the output of the model##
+#HR_self is stability
+#HR_other is coupling
+
+#We can see that all slopes with HR_self are significant, which means that for each condition the heart rate for self (HR_self) is stabil. This value is negative in the output, but remember that we have a minus to include (which we chose to not have in the model and just remember instead when we wanted to interpret the output), and this means that the value in the output is actually positive and not negative.
+
+#Coupling (the conditions wiht :HR_other) is not significant, which means that the HR1 and HR2. 
 
 #Bonus points: Add to the previous model also change in the other to see whether my adaptation is influenced by the other's adaptation.
-
 ```
+##EXAPLANATION OF THE SYNTAX OF THE MODEL##
 
+#FIXED/STRUCTURAL EFFECTS#
+Stability: the beta of the HR_self
+Coupling: the beta of the HR_other (the beta of the HR_other minus the HR_self)
+Effects of condition: stability and coupling might differ across conditions. 
+
+#INTERACTION EFFECTS#
+In our model we say that the HR_self and HR_other interact with the condition - thus, the two people vary in their reaction to the different conditions. We model interaction effects in our model by using : instead of * because this will give us all of the conditions in the summary output and using * will not.
+Because we have different individuals we need to account for this in our model. This means that we cannot expect that coupling and stability will be the same for all participants. Furthermore, we cannot expect that the effects of conditions are the same across all participants. We might see that in certain conditions the effects might become stronger. The way conditions changes the values of stability and coupling might vary across participants. Thus, we expect stability and coupling to vary across conditions.
+
+The zero-notation:
+By putting 0 in front of the fixed effects, we will get separate intercepts for the two groups (HR_self and HR_other). 0 tells the lmer to give us an intercept for each of the main effects. Because HR_self and HR_other are continous they cannot be the intercept, which is why it we write 0 + condition to get an intercept for each condition. We want to know what the effect (stability and coupling) of HR_self and HR_other is for each intercept in each condition. Thus, we write:
+
+0 + condition + (HR_self + HR_other) : condition
+
+"condition" is the intercepts
+"(HR_self + HR_other) are the slopes
+
+This model says that we have an intercept which is the condition we set as baseline, and then it is saying that when condition is the baseline and when HR_self and HR_other is zero it gives us the average level of change. We also have the effect of the HR_self (stability) in the baseline condition - this is the main effect of HR_self in the baseline condition when everything else is zero. We also have a main effect of HR_other (coupling) for the baseline condition.
+The interaction effect is the difference between the effect of HR_self in the baseline condition and the effect of HR_self in the next condtiion. We are telling the model to give us the baseline change when HR_self and HR_other are zero in the three conditions (the three intercepts) and the three slopes for each condition.
+
+When we use : instead of * we get the estimates for each condition (NB! the models are the same using * or : but the output is different). This might tell us that there is a significant different in stability and coupling for each condition. When using : it makes interpreting the intercepts much easier. When we use * it will give us the difference between the parameters.
+
+We need to run the model both we colon and with the asterix because this will help us to interpret the interactions better. 
+
+#VARYING/RANDOM EFFECTS#
+We do not expect stability and coupling to be the same for each pair of participants, which is why we need to include random effects. We expect that the fixed effects and interaction effects will change according to the varying effects - by participant and also by the fact that two people are engaging with each other (the dyad/group). Thus, we expect the fixed effects to NOT be the same for each participant and for each pair - we expect them to vary which is what we tell the model by adding varying effects.
+
+These are the random effects that we add:
+(0 + Condition|participant) + (0 + Condition|Group)
+
+We tell the model that the data are not all the same - some data are from pair 1 and pair 2 etc. The estimates of the effects should be constrained wihtin participants (random effect 1) and group (random effect 2). 
+
+Partial pooling: we tell the model to keep in mind that there is another person in the pair - thus the data from participant 1 is informed by the data from participant 2. Thus, each participant is pulled towards the mean of all participants. 
+
+The model is now very complex after adding the random effects - there are a lot of parameters (close to 1000 that the model needs to estimate which takes a long time). 
+Therefore we need to simply the model - removing stability and coupling as individual level parameters :-(
+We would not have to do this if we were doing Bayes, because in this framework we can tell the model were to look for the parameters it is estimating, which will make the process of estimating the parameters faster.
+
+#THE BASELINES: SHUFFLED AND SURROGATE PAIRS##
+Surrogate pairs: taking all of the pairs in study four, and creating all possible surrogate pairs (all the different ways in which one person from one pair can be combined with another person from a different pair). 
+
+We want to know if our model (the intercepts and the slopes) changes by type (real vs. surrogate) - are we really seeing something that is due to actual coordination or just an effect that is due to the task. 
+If the effect is due to the task, it will be the same no matter the type (real or surrogate)
+For conversation we would expect that the effect is different according to type (real vs. surrogate). Therfore we add "type" to the model before the random effects: 
+
+0 + (condition + (HR_self + HR_other) : condition) : Type + 
+(0 + condition|participant) + 
+(0 + condition|group)
 
 ## Now we need to create control baselines.
 
@@ -880,25 +955,91 @@ Tip: sample() is your friend, but make sure to shuffle things within participant
  
 ```{r}
 #Create a shuffled dataset
+HR_self$HR_self <-  sample(HR_self$HR_self)
 
-#Concatenate it to the original dataset (and remember to have a column telling you which is which)
+HR_other$HR_other <- sample(HR_other$HR_other)
 
-#Create the same models as in the previous chunk, but adding an interaction by shuffled vs. real
+HR_self$HR_lead <-  lead(HR_self$HR_self, 1)
+
+HR_self$HR_change_self <- HR_self$HR_self - HR_self$HR_lead
+
+HR_self$HR_other <- HR_other$HR_other
+
+HR_self$Type <- "shuffle"
+
+D = rbind(phys_data_long[,colnames(phys_data_long)[colnames(phys_data_long) %in% colnames(HR_self)]], HR_self)
+
+#Now run model where you specify Type (real vs. shuffled) as an interaction effect 
+model_shuffle <- lmer(HR_change_self ~ 0 + (Condition + (HR_self + HR_other) : Condition): Type + (0 + Condition|participant) + (0 + Condition|Group), data = D)
+
+summary(model_shuffle)
 
 ```
- 
  
 ### TRICKY! Creating controls: surrogate pair controls
  - Per each real pair, identify at least one surrogate pair (matching one of the participants, with somebody doing the same task, but in a different pair)
 
 ```{r}
 #Identify unique pairs within a given study (to keep things manageable) and create list of possible surrogate pairs (e.g. individual 1 from pair 1 and individual 2 from pair 2)
-
 #Starting from the wide format, create "surrogate" dataset with the data from surrogate pairs
 
-#Make it into long format
+Groups <- as.numeric(as.character(unique(phys_data_long$Group[phys_data_long$Study==4]))) # List all pairs
+
+SurrogateList <- expand.grid(a = Groups, b = Groups) # Identify all possible combinations of 2 pairs
+
+SurrogateList = subset(SurrogateList, a != b) # exclude combinations with identical pairs
+
+#Create empty data frame
+surrogate_df <- data.frame(matrix(ncol = 15, nrow = 0))
+
+u <- c("time", "Study", "Trial", "Group", "participant", "Condition", "HR_change_self", "HR_change_other", "HR_self", "HR_lead", "Resp_change_self", "Resp_change_other", "Resp_self", "Resp_other", "Resp_lead")
+
+colnames(surrogate_df) <- u
+
+for (i in 1:nrow(SurrogateList)){ # loop through all combinations
+  x <- subset(phys_data_long, Group==SurrogateList$a[i]) # subset data from the first pair
+  y <- subset(phys_data_long, Group==SurrogateList$b[i]) # subset data from the second pair 
+  group <- c(800 + ((1:4)*i)) # create new pair id
+  
+  for (co in c("Synchronous","TurnTaking","MovementGuided","Conversation", "MovementCoop")){ # loop through conditions
+    if (co %in% unique(x$Condition) & co %in% unique(y$Condition)){ # check that both pairs have the data for that condition
+      z1 <- subset(x, Condition==co) # subset only that condtion from first pair
+      z2 <- subset(y, Condition==co) # subset only that condtion from second pair
+
+      if (nrow(z1) > nrow(z2)) { # make sure data have same length in both pairs
+        z1<-z1[1:length(z2)]
+        }
+      
+      if (nrow(z2) > nrow(z1)) {
+        z2<-z2[1:length(z1)]
+        }
+
+       w1 <- z1 %>% mutate( # assemble new pair combining the 2 pairs
+        HR2 = z2$HR2,
+        Resp2 = z2$Resp2,
+        HR2_lead = z2$HR2_lead, 
+        Resp2_lead = z2$Resp2_lead, 
+        HR2_change = z2$HR2_change,
+        Resp2_change = z2$Resp2_change)
+       
+       surrogate_df <- rbind(surrogate_df, w1)
+    } }}
+
+#We make a column calling it "Type" in the two dataframes
+surrogate_df$Type <- "surrogate"
+
+phys_data_long$Type <- "real"
+
+#Now we need to rbind the surrgate dataframe with the original data frame
+phys_data_type <- rbind(phys_data_long, surrogate_df)
 
 #Create models as in chunks above, but adding an interaction with the Real vs. Surrogate variable (exclude shuffled ones for simplicity)
+model <- lmer(HR_change_self ~ 0 + 
+                (Condition + (HR_self + HR_other) : Condition): Type + 
+                (0 + Condition|participant) + 
+                (0 + Condition|Group), data = phys_data_type)
+
+summary(model)
 
 ```
  
