@@ -1025,7 +1025,7 @@ for (i in 1:nrow(SurrogateList)){ # loop through all combinations
        surrogate_df <- rbind(surrogate_df, w1)
     } }}
 
-#We make a column calling it "Type" in the two dataframes
+#We make a column calling it "Type" in the two dataframes. 
 surrogate_df$Type <- "surrogate"
 
 phys_data_long$Type <- "real"
